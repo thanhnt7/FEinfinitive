@@ -1,5 +1,5 @@
 # furtorch_v5.py
-# FIXED: Uses correct log format "+changedItems+" instead of "+DropItems+"
+# FIXED: Supports both "+DropItems+" and "+changedItems+" log formats
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -96,7 +96,7 @@ def convert_from_log_structure(log_text):
 
 
 def scanned_log_for_changed_items(changed_text):
-    # FIXED: Look for +changedItems+ instead of +DropItems+
+    # FIXED: Look for both +DropItems+ and +changedItems+ patterns
     lines = changed_text.split('\n')
     drop_blocks = []
     i = 0
@@ -104,15 +104,16 @@ def scanned_log_for_changed_items(changed_text):
 
     while i < line_count:
         line = lines[i]
-        # CHANGED: Now looking for "+changedItems+1+Index"
-        if re.search(r'\+changedItems\+1\+Index', line):
+        # CHANGED: Now looking for both "+DropItems+1+Index" AND "+changedItems+1+Index"
+        if re.search(r'\+(DropItems|changedItems)\+1\+Index', line):
             current_block = [line]
             j = i + 1
 
             while j < line_count:
                 current_line = lines[j]
-                if 'Display:' in current_line or '+changedItems+1+Index' in current_line:
-                    if '+changedItems+1+Index' not in current_line:
+                # Check for end of block - either Display: or another drop/changed item
+                if 'Display:' in current_line or re.search(r'\+(DropItems|changedItems)\+1\+Index', current_line):
+                    if not re.search(r'\+(DropItems|changedItems)\+1\+Index', current_line):
                         current_block.append(current_line)
                     j += 1
                     break
@@ -152,7 +153,7 @@ def parse_changed_items(drop_data):
 class FurTorchV5:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("FurTorch v5.0 - FIXED Log Format")
+        self.window.title("FurTorch v5.0 - Drop Event Fixed")
         self.window.geometry("600x450")
         self.window.resizable(False, False)
         
@@ -224,7 +225,7 @@ class FurTorchV5:
         main = ttk.Frame(self.window, padding="10")
         main.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        ttk.Label(main, text="🔥 FurTorch v5 (Fixed Format)", 
+        ttk.Label(main, text="🔥 FurTorch v5 (Drop Event Fixed)",
                  font=('Arial', 14, 'bold')).grid(row=0, column=0, columnspan=3, pady=5)
         
         stats = ttk.LabelFrame(main, text="Statistics", padding="10")
@@ -318,10 +319,10 @@ class FurTorchV5:
                 f.seek(0, 2)
                 self.log_position = f.tell()
             
-            self.status.config(text="✓ Game detected! Monitoring changedItems events!", 
+            self.status.config(text="✓ Game detected! Monitoring drop events!",
                               foreground='#10b981')
             print(f"✓ Monitoring: {log_path}")
-            print("✓ Looking for: +changedItems+ events")
+            print("✓ Looking for: +DropItems+ and +changedItems+ events")
             
         except Exception as e:
             print(f"❌ Error: {e}")
@@ -373,10 +374,10 @@ class FurTorchV5:
                     print("[MAP] Exiting map")
                     self.window.after(0, self.auto_end_map)
         
-        # FIXED: Look for changedItems instead of DropItems
+        # FIXED: Look for both DropItems and changedItems
         drop_blocks = scanned_log_for_changed_items(text)
         if drop_blocks:
-            print(f"[PARSE] Found {len(drop_blocks)} changedItems blocks")
+            print(f"[PARSE] Found {len(drop_blocks)} drop event blocks")
         
         for block in drop_blocks:
             try:
@@ -595,9 +596,9 @@ class FurTorchV5:
 
 if __name__ == "__main__":
     print("="*60)
-    print("FurTorch v5.0 - With Correct Log Format")
+    print("FurTorch v5.0 - Drop Event Detection Fixed")
     print("="*60)
-    print("Fixed: Now detects +changedItems+ events")
+    print("Fixed: Now detects both +DropItems+ and +changedItems+ events")
     print()
     
     try:
