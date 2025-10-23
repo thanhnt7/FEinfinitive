@@ -1,0 +1,14 @@
+# FurTorch v5 - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Windows API access (detect game, find log files)
+pywin32>=305
+
+# Process monitoring
+psutil>=5.9.0
+
+# Build executable
+pyinstaller>=5.0
+
+# GUI library (tkinter) - included with Python by default
+# No separate installation needed for tkinter
