@@ -155,8 +155,8 @@ def parse_pickup_events(log_text):
 class FurTorchV5:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("FurTorch v5.0 - New Log Format")
-        self.window.geometry("600x450")
+        self.window.title("FE Infinite - by FurTorch")
+        self.window.geometry("550x420")
         self.window.resizable(False, False)
 
         # State
@@ -179,7 +179,11 @@ class FurTorchV5:
 
         # Track previous bag counts to calculate deltas
         self.previous_bag_counts = {}
-        
+
+        # Drop window references
+        self.drop_window = None
+        self.drop_listbox = None
+
         # Settings
         self.settings = {
             "map_cost": 0.0,
@@ -232,14 +236,14 @@ class FurTorchV5:
         self.window.attributes('-topmost', True)
         self.window.attributes('-alpha', self.settings['opacity'])
         
-        main = ttk.Frame(self.window, padding="10")
+        main = ttk.Frame(self.window, padding="5")
         main.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        ttk.Label(main, text="🔥 FurTorch v5 (New Format)",
+        ttk.Label(main, text="🔥 FE Infinite",
                  font=('Arial', 14, 'bold')).grid(row=0, column=0, columnspan=3, pady=5)
         
-        stats = ttk.LabelFrame(main, text="Statistics", padding="10")
-        stats.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
+        stats = ttk.LabelFrame(main, text="Statistics", padding="8")
+        stats.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=3)
         
         ttk.Label(stats, text="Current:").grid(row=0, column=0, sticky=tk.W)
         self.lbl_time = ttk.Label(stats, text="0m00s", font=('Arial', 10, 'bold'))
@@ -254,7 +258,7 @@ class FurTorchV5:
         self.lbl_total_speed.grid(row=1, column=2)
         
         income_frame = ttk.Frame(main)
-        income_frame.grid(row=2, column=0, columnspan=3, pady=10)
+        income_frame.grid(row=2, column=0, columnspan=3, pady=8)
 
         # Map cost display (above profit)
         self.lbl_map_cost = ttk.Label(income_frame, text="💰 Cost: 0.00",
@@ -270,7 +274,7 @@ class FurTorchV5:
         self.lbl_maps.grid(row=1, column=1, padx=15)
         
         btn = ttk.Frame(main)
-        btn.grid(row=3, column=0, columnspan=3, pady=5)
+        btn.grid(row=3, column=0, columnspan=3, pady=3)
         
         self.btn_start = ttk.Button(btn, text="▶ Start", command=self.manual_start, width=10)
         self.btn_start.grid(row=0, column=0, padx=2)
@@ -283,7 +287,7 @@ class FurTorchV5:
         self.btn_view.grid(row=0, column=2, padx=2)
         
         extra = ttk.Frame(main)
-        extra.grid(row=4, column=0, columnspan=3, pady=5)
+        extra.grid(row=4, column=0, columnspan=3, pady=3)
         
         ttk.Button(extra, text="Drops", command=self.show_drops, width=8).grid(row=0, column=0, padx=2)
         ttk.Button(extra, text="Settings", command=self.show_settings, width=8).grid(row=0, column=1, padx=2)
@@ -291,7 +295,7 @@ class FurTorchV5:
         ttk.Button(extra, text="Reset", command=self.reset_all, width=8).grid(row=0, column=3, padx=2)
         
         self.status = ttk.Label(main, text="Initializing...", foreground='gray', font=('Arial', 9))
-        self.status.grid(row=5, column=0, columnspan=3, pady=10)
+        self.status.grid(row=5, column=0, columnspan=3, pady=5)
         
     def find_game_log(self):
         try:
@@ -568,42 +572,76 @@ class FurTorchV5:
         color = '#10b981' if profit >= 0 else '#ef4444'
         self.lbl_income.config(text=f"🔥 Profit: {profit:.2f}", foreground=color)
         self.lbl_maps.config(text=f"🎫 {self.map_count}")
+
+        # Update drop list if window is open
+        self.update_drop_list()
         
     def toggle_view(self):
         self.view_mode = "total" if self.view_mode == "current" else "current"
         self.btn_view.config(text="Current" if self.view_mode == "total" else "Total")
         self.update_display()
+        # Update drop list immediately when view mode changes
+        self.update_drop_list()
         
     def show_drops(self):
+        # If window already exists, just bring it to front
+        if self.drop_window and self.drop_window.winfo_exists():
+            self.drop_window.lift()
+            return
+
         win = tk.Toplevel(self.window)
         win.title("Drop List")
         win.geometry("500x400")
         win.attributes('-topmost', True)
-        
+
+        # Store reference
+        self.drop_window = win
+
+        # Handle window close
+        def on_close():
+            self.drop_window = None
+            self.drop_listbox = None
+            win.destroy()
+        win.protocol("WM_DELETE_WINDOW", on_close)
+
         frame = ttk.Frame(win)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
+
         scrollbar = ttk.Scrollbar(frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
+
         listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set, font=('Consolas', 10))
         listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=listbox.yview)
-        
+
+        # Store listbox reference
+        self.drop_listbox = listbox
+
+        # Initial update
+        self.update_drop_list()
+
+    def update_drop_list(self):
+        """Update the drop list if the window is open"""
+        if not self.drop_listbox or not self.drop_window or not self.drop_window.winfo_exists():
+            return
+
+        # Clear current list
+        self.drop_listbox.delete(0, tk.END)
+
         drops = self.drops_current if self.view_mode == "current" else self.drops_total
-        
+
         if not drops:
-            listbox.insert(tk.END, "No drops yet!")
+            self.drop_listbox.insert(tk.END, "No drops yet!")
         else:
-            for item_id, count in sorted(drops.items(), 
-                                        key=lambda x: self.item_db[x[0]]['price'] * x[1], 
+            for item_id, count in sorted(drops.items(),
+                                        key=lambda x: self.item_db[x[0]]['price'] * x[1],
                                         reverse=True):
                 item = self.item_db[item_id]
                 price = item['price']
                 if self.settings['apply_tax'] and item_id != "100300":
                     price *= 0.875
                 value = price * count
-                listbox.insert(tk.END, f"{item['name']} x{count} [{value:.2f}]")
+                self.drop_listbox.insert(tk.END, f"{item['name']} x{count} [{value:.2f}]")
             
     def show_settings(self):
         win = tk.Toplevel(self.window)
@@ -692,7 +730,8 @@ class FurTorchV5:
 
 if __name__ == "__main__":
     print("="*60)
-    print("FurTorch v5.0 - New Log Format Parser")
+    print("FE Infinite - Drop Tracker")
+    print("Created by FurTorch")
     print("="*60)
     print("Updated: Now parses ItemChange/BagMgr pickup events")
     print("Compatible with: 2025.10.23+ game log format")

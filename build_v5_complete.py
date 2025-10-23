@@ -8,8 +8,8 @@ import shutil
 from datetime import datetime
 
 print("="*70)
-print("FurTorch v5.0 - Portable Builder")
-print("FIXED: Correct log path with \\UE_game\\ folder")
+print("FE Infinite - Portable Builder")
+print("Created by FurTorch")
 print("="*70)
 print()
 
@@ -79,7 +79,7 @@ build_cmd = [
     "pyinstaller",
     "--onefile",
     "--windowed",
-    "--name=FurTorch_v5",
+    "--name=FEInfinite",
     "--add-data=full_table_en.json;.",
     "--hidden-import=win32gui",
     "--hidden-import=win32process",
@@ -110,32 +110,33 @@ except subprocess.CalledProcessError as e:
 # Step 5: Create portable package
 print("[5/6] Creating portable package...")
 
-portable_dir = "FurTorch_v5_Portable"
+portable_dir = "FEInfinite_Portable"
 os.makedirs(portable_dir, exist_ok=True)
 
 # Copy exe
-if not os.path.exists("dist/FurTorch_v5.exe"):
+if not os.path.exists("dist/FEInfinite.exe"):
     print("❌ Executable not found!")
     input("Press Enter to exit...")
     sys.exit(1)
 
-shutil.copy2("dist/FurTorch_v5.exe", portable_dir)
-exe_size = os.path.getsize(f"{portable_dir}/FurTorch_v5.exe") / 1024 / 1024
-print(f"  ✓ FurTorch_v5.exe ({exe_size:.1f} MB)")
+shutil.copy2("dist/FEInfinite.exe", portable_dir)
+exe_size = os.path.getsize(f"{portable_dir}/FEInfinite.exe") / 1024 / 1024
+print(f"  ✓ FEInfinite.exe ({exe_size:.1f} MB)")
 
 # Copy data files
 shutil.copy2("full_table_en.json", portable_dir)
 print("  ✓ Data files copied")
 
 # Create README
-readme = """FurTorch v5.0 - Drop Tracker
+readme = """FE Infinite - Drop Tracker
 =============================
+Created by FurTorch
 
-WHAT'S NEW IN v5:
-✓ FIXED: Correct log path detection (now includes \\UE_game\\)
-✓ Better error messages
+FEATURES:
+✓ Real-time drop tracking and profit calculation
+✓ Automatic map detection
+✓ Correct log path detection (includes \\UE_game\\)
 ✓ Console output for debugging
-✓ Dual-path search (compatible with different installations)
 
 QUICK START:
 1. Start Torchlight: Infinite
@@ -206,18 +207,19 @@ print("  ✓ README.txt created")
 
 # Create launcher
 launcher = """@echo off
-title FurTorch v5 Launcher
+title FE Infinite Launcher
 color 0A
 echo ==========================================
-echo   FurTorch v5.0 - Drop Tracker
+echo   FE Infinite - Drop Tracker
+echo   Created by FurTorch
 echo ==========================================
 echo.
 echo Make sure Torchlight: Infinite is running!
 echo.
-echo Starting FurTorch...
-start "" "FurTorch_v5.exe"
+echo Starting FE Infinite...
+start "" "FEInfinite.exe"
 echo.
-echo FurTorch started!
+echo FE Infinite started!
 echo.
 timeout /t 2 >nul
 """
@@ -228,19 +230,20 @@ print("  ✓ Start.bat created")
 
 # Create debug launcher
 debug_launcher = """@echo off
-title FurTorch v5 - Debug Mode
+title FE Infinite - Debug Mode
 color 0E
 echo ==========================================
-echo   FurTorch v5.0 - DEBUG MODE
+echo   FE Infinite - DEBUG MODE
+echo   Created by FurTorch
 echo ==========================================
 echo.
 echo This window shows debug messages.
 echo Keep it open to see what's happening!
 echo.
 pause
-FurTorch_v5.exe
+FEInfinite.exe
 echo.
-echo FurTorch closed.
+echo FE Infinite closed.
 pause
 """
 
@@ -261,7 +264,7 @@ print(f"Location: {os.path.abspath(portable_dir)}")
 print(f"Total size: {total_size:.1f} MB")
 print()
 print("Contents:")
-print("  • FurTorch_v5.exe      - Main application")
+print("  • FEInfinite.exe       - Main application")
 print("  • full_table_en.json   - Item database")
 print("  • README.txt           - User guide")
 print("  • Start.bat            - Quick launcher")
