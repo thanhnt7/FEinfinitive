@@ -17,8 +17,7 @@ print()
 print("[1/6] Checking required files...")
 required = {
     "furtorch_v5.py": "Main application",
-    "full_table.json": "Item database",
-    "id_table.json": "Item ID mappings"
+    "full_table.json": "Item database"
 }
 
 missing = []
@@ -35,7 +34,6 @@ if missing:
     print("\nMake sure you have:")
     print("  • furtorch_v5.py (the new fixed code)")
     print("  • full_table.json (from original)")
-    print("  • id_table.json (from original)")
     input("\nPress Enter to exit...")
     sys.exit(1)
 
@@ -83,7 +81,6 @@ build_cmd = [
     "--windowed",
     "--name=FurTorch_v5",
     "--add-data=full_table.json;.",
-    "--add-data=id_table.json;.",
     "--hidden-import=win32gui",
     "--hidden-import=win32process",
     "--hidden-import=win32api",
@@ -128,7 +125,6 @@ print(f"  ✓ FurTorch_v5.exe ({exe_size:.1f} MB)")
 
 # Copy data files
 shutil.copy2("full_table.json", portable_dir)
-shutil.copy2("id_table.json", portable_dir)
 print("  ✓ Data files copied")
 
 # Create README
@@ -267,7 +263,6 @@ print()
 print("Contents:")
 print("  • FurTorch_v5.exe      - Main application")
 print("  • full_table.json      - Item database")
-print("  • id_table.json        - Item mappings")
 print("  • README.txt           - User guide")
 print("  • Start.bat            - Quick launcher")
 print("  • Start_Debug.bat      - Debug mode launcher")
