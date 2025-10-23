@@ -198,7 +198,11 @@ class FurTorchV5:
         
         # Create UI
         self.create_ui()
-        
+
+        # Reset all data on startup
+        self._reset_data_silent()
+        self.update_display()
+
         # Find game
         if HAS_WIN_SUPPORT:
             self.find_game_log()
@@ -691,17 +695,24 @@ class FurTorchV5:
             json.dump(data, f, indent=4, ensure_ascii=False)
         messagebox.showinfo("Export", f"Saved to {filename}")
         
-    def reset_all(self):
-        if messagebox.askyesno("Reset", "Reset all statistics?"):
-            self.current_time = self.total_time = 0
-            self.current_income = self.total_income = 0
-            self.current_map_cost = self.total_map_cost = 0.0
-            self.map_count = 0
-            self.drops_current = self.drops_total = {}
-            self.consumed_items_current = {}
-            self.is_tracking = self.is_in_map = False
+    def _reset_data_silent(self):
+        """Reset all statistics without confirmation - used on startup"""
+        self.current_time = self.total_time = 0
+        self.current_income = self.total_income = 0
+        self.current_map_cost = self.total_map_cost = 0.0
+        self.map_count = 0
+        self.drops_current = self.drops_total = {}
+        self.consumed_items_current = {}
+        self.previous_bag_counts = {}
+        self.is_tracking = self.is_in_map = False
+        if hasattr(self, 'btn_start'):
             self.btn_start.config(state=tk.NORMAL)
             self.btn_end.config(state=tk.DISABLED)
+        print("✓ Data reset on startup")
+
+    def reset_all(self):
+        if messagebox.askyesno("Reset", "Reset all statistics?"):
+            self._reset_data_silent()
             self.update_display()
             self.status.config(text="✓ Statistics reset", foreground='gray')
             
