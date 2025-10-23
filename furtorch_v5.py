@@ -478,13 +478,24 @@ class FurTorchV5:
             # Accumulate total map cost across all maps
             self.total_map_cost += self.current_map_cost
 
-            # Calculate net profit for this map
+            # Calculate net profit for this map (before resetting)
             net_profit = self.current_income - self.current_map_cost
+            map_cost_display = self.current_map_cost
 
             self.btn_start.config(state=tk.NORMAL)
             self.btn_end.config(state=tk.DISABLED)
-            self.status.config(text=f"✓ Map done! Profit: {net_profit:.2f} (cost: {self.current_map_cost:.2f})",
+            self.status.config(text=f"✓ Map done! Profit: {net_profit:.2f} (cost: {map_cost_display:.2f})",
                               foreground='#8b5cf6')
+
+            # Reset current values after accumulating to totals
+            # This ensures "Current" view shows 0 when not in a map
+            self.current_time = 0
+            self.current_income = 0
+            self.current_map_cost = 0.0
+            self.drops_current = {}
+            self.consumed_items_current = {}
+
+            self.update_display()
             
     def manual_start(self):
         self.auto_start_map()
