@@ -563,14 +563,15 @@ class FurTorchV5:
 
         # Display map cost
         if self.view_mode == "current":
-            self.lbl_map_cost.config(text=f"💰 Cost: {self.current_map_cost:.2f}")
+            self.lbl_map_cost.config(text=f"💰 Map Cost: {self.current_map_cost:.2f}")
         else:
             self.lbl_map_cost.config(text=f"💰 Total Cost: {self.total_map_cost:.2f}")
 
         # Display net profit
         profit = current_net_profit if self.view_mode == "current" else total_net_profit
         color = '#10b981' if profit >= 0 else '#ef4444'
-        self.lbl_income.config(text=f"🔥 Profit: {profit:.2f}", foreground=color)
+        profit_label = "Map Profit" if self.view_mode == "current" else "Total Profit"
+        self.lbl_income.config(text=f"🔥 {profit_label}: {profit:.2f}", foreground=color)
         self.lbl_maps.config(text=f"🎫 {self.map_count}")
 
         # Update drop list if window is open
