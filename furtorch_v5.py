@@ -95,53 +95,18 @@ def convert_from_log_structure(log_text):
     return root
 
 
+
 def scan_log_for_pickups(log_text):
     """
-    NEW: Scan for ItemChange and BagMgr events in the new log format.
-
-    Example format:
-    ItemChange@ ProtoName=PickItems start
-    ItemChange@ Update Id=100200_... BagNum=464 in PageId=102 SlotId=22
-    BagMgr@:Modfy BagItem PageId = 102 SlotId = 22 ConfigBaseId = 100200 Num = 464
-    ItemChange@ ProtoName=PickItems end
+    DEPRECATED: This function is NOT used in the actual log monitoring.
+    The real parsing happens in parse_log_text() method which correctly
+    calculates deltas using previous_bag_counts tracking.
+    
+    This function is kept for backwards compatibility but should not be called.
     """
-    drops_found = []
-    lines = log_text.split('\n')
+    print("⚠ WARNING: scan_log_for_pickups() called but is deprecated!")
+    return []
 
-    for line in lines:
-        # Look for BagMgr modify events with ConfigBaseId and Num
-        if 'BagMgr@' in line and 'ConfigBaseId' in line and 'Num = ' in line:
-            try:
-                # Extract ConfigBaseId (item ID)
-                base_id_match = re.search(r'ConfigBaseId\s*=\s*(\d+)', line)
-                # Extract Num (count) - need to be careful to get the right Num
-                num_match = re.search(r'Num\s*=\s*(\d+)', line)
-
-                if base_id_match and num_match:
-                    item_id = base_id_match.group(1)
-                    # For Num, we want the DIFFERENCE from previous count
-                    # But since we don't track previous, we'll just use increment of 1
-                    # This might need adjustment based on actual behavior
-                    drops_found.append((item_id, 1))
-            except Exception as e:
-                print(f"[ERROR] Failed to parse BagMgr line: {e}")
-
-        # Alternative: Look for ItemChange Update events
-        elif 'ItemChange@' in line and 'Update' in line and 'BagNum=' in line:
-            try:
-                # Extract the item ID from the UUID-like string
-                # Format: Id=100200_c26bfde9-af0d-11f0-b8b8-00000000002a
-                id_match = re.search(r'Id=(\d+)_', line)
-                if id_match:
-                    item_id = id_match.group(1)
-                    # Count as 1 pickup (we don't have delta info)
-                    # Note: This will be deduplicated with BagMgr events
-                    # So we'll prefer BagMgr events and skip ItemChange
-                    pass
-            except Exception as e:
-                print(f"[ERROR] Failed to parse ItemChange line: {e}")
-
-    return drops_found
 
 
 def parse_pickup_events(log_text):
@@ -391,6 +356,20 @@ class FurTorchV5:
             print(f"[ERROR] Read error: {e}")
             
     def parse_log_text(self, text):
+        """
+        Parse game log text for map transitions and item pickups/consumption.
+        
+        CRITICAL: This function calculates item pickup quantities by tracking
+        the DELTA between old and new bag counts. The previous_bag_counts
+        dictionary must persist across maps to correctly calculate deltas.
+        
+        Logic:
+        - BagMgr line shows: ConfigBaseId = [ITEM_ID] Num = [NEW_TOTAL]
+        - We compare NEW_TOTAL with previous count (from previous_bag_counts)
+        - delta = new_count - old_count
+        - If delta > 0: Items picked up (add to drops)
+        - If delta < 0: Items consumed (add to map cost)
+        """
         # Check map transitions
         if "PageApplyBase@ _UpdateGameEnd" in text:
             if "XZ_YuJinZhiXiBiNanSuo200" in text and "NextSceneName = World'/Game/Art/Maps" in text:
@@ -402,14 +381,14 @@ class FurTorchV5:
                     print("[MAP] Exiting map")
                     self.window.after(0, self.auto_end_map)
         
-        # NEW: Look for ItemChange/BagMgr pickup events and calculate deltas
+        # Parse BagMgr events to track item pickups and consumption
         lines = text.split('\n')
         for line in lines:
             if 'BagMgr@' in line and 'ConfigBaseId' in line and 'Num = ' in line:
                 try:
                     # Extract ConfigBaseId (item ID)
                     base_id_match = re.search(r'ConfigBaseId\s*=\s*(\d+)', line)
-                    # Extract Num (total count in bag)
+                    # Extract Num (total count in bag NOW)
                     num_match = re.search(r'Num\s*=\s*(\d+)', line)
 
                     if base_id_match and num_match:
@@ -421,7 +400,7 @@ class FurTorchV5:
                         delta = new_count - old_count
 
                         if delta > 0:
-                            # Items picked up
+                            # Items picked up (positive delta)
                             print(f"[DROP] ID:{item_id} x{delta} (bag: {old_count} -> {new_count})")
                             self.window.after(0, lambda id=item_id, c=delta: self.add_drop(id, c))
                         elif delta < 0:
@@ -430,7 +409,7 @@ class FurTorchV5:
                             print(f"[CONSUMED] ID:{item_id} x{consumed} (bag: {old_count} -> {new_count})")
                             self.window.after(0, lambda id=item_id, c=consumed: self.add_consumed(id, c))
 
-                        # Update tracking
+                        # Update tracking - MUST persist across maps!
                         self.previous_bag_counts[item_id] = new_count
                 except Exception as e:
                     print(f"[ERROR] Failed to parse BagMgr line: {e}")
@@ -466,7 +445,11 @@ class FurTorchV5:
             self.current_income = 0  # Don't subtract manual map_cost anymore
             self.drops_current = {}
             self.consumed_items_current = {}
-            self.previous_bag_counts = {}  # Reset inventory tracking for new map
+            # BUG FIX: DON'T reset previous_bag_counts here!
+            # We need to keep tracking bag counts across maps to calculate proper deltas.
+            # If we reset this, the first pickup in a new map will use the full bag count
+            # instead of just the delta from the previous count.
+            # self.previous_bag_counts = {}  # REMOVED - Keep tracking across maps
             self.current_map_cost = 0.0  # Reset auto-calculated map cost
             self.map_count += 1
             self.start_time = time.time()
@@ -697,19 +680,31 @@ class FurTorchV5:
         messagebox.showinfo("Export", f"Saved to {filename}")
         
     def _reset_data_silent(self):
-        """Reset all statistics without confirmation - used on startup"""
+        """
+        Reset all statistics without confirmation - used on startup and manual reset.
+        
+        IMPORTANT: We do NOT reset previous_bag_counts here!
+        - previous_bag_counts tracks the last known inventory state
+        - It's needed to calculate deltas (new - old = picked up amount)
+        - Resetting it would cause the next pickup to show the full bag count
+        
+        For a clean session reset, we want:
+        - Statistics to reset to 0 (time, income, drops, etc.)
+        - But inventory tracking to continue (so deltas are accurate)
+        """
         self.current_time = self.total_time = 0
         self.current_income = self.total_income = 0
         self.current_map_cost = self.total_map_cost = 0.0
         self.map_count = 0
         self.drops_current = self.drops_total = {}
         self.consumed_items_current = {}
-        self.previous_bag_counts = {}
+        # DON'T reset previous_bag_counts - we need it for delta calculation!
+        # self.previous_bag_counts = {}  # REMOVED - Keep for accurate tracking
         self.is_tracking = self.is_in_map = False
         if hasattr(self, 'btn_start'):
             self.btn_start.config(state=tk.NORMAL)
             self.btn_end.config(state=tk.DISABLED)
-        print("✓ Data reset on startup")
+        print("✓ Data reset - statistics cleared, inventory tracking maintained")
 
     def reset_all(self):
         if messagebox.askyesno("Reset", "Reset all statistics?"):
