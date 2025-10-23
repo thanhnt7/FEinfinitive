@@ -29,7 +29,7 @@ This guide explains how to set up FurTorch v5 on a new PC.
    ```
    FurTorch_v5_Portable/
    ├── FurTorch_v5.exe       ← Main application
-   ├── full_table.json       ← Item database
+   ├── full_table_en.json       ← Item database
    ├── README.txt            ← User guide
    ├── Start.bat             ← Quick launcher
    └── Start_Debug.bat       ← Debug mode
@@ -91,7 +91,7 @@ pip install pyinstaller>=5.0
 
 Make sure you have:
 - ✅ `furtorch_v5.py` - Main application code
-- ✅ `full_table.json` - Item database
+- ✅ `full_table_en.json` - Item database
 - ✅ `build_v5_complete.py` - Build script
 
 #### Step 4: Build the Executable
@@ -151,7 +151,7 @@ pip install --user -r requirements.txt
 ### Build Issues
 
 **Problem: "Missing files" error**
-- Make sure `furtorch_v5.py` and `full_table.json` are in the same folder as `build_v5_complete.py`
+- Make sure `furtorch_v5.py` and `full_table_en.json` are in the same folder as `build_v5_complete.py`
 
 **Problem: Build succeeds but exe doesn't work**
 - Run `Start_Debug.bat` to see error messages
@@ -184,7 +184,7 @@ python furtorch_v5.py
 ```
 FEinfinitive/
 ├── furtorch_v5.py           # Main application code
-├── full_table.json          # Item database (prices, names, types)
+├── full_table_en.json          # Item database (prices, names, types)
 ├── build_v5_complete.py     # Build script for creating .exe
 ├── requirements.txt         # Python dependencies
 ├── SETUP.md                 # This file
@@ -202,7 +202,7 @@ python furtorch_v5.py
 ```
 
 ### Update Item Database
-- Edit `full_table.json` to update item prices
+- Edit `full_table_en.json` to update item prices
 - Format: `{"item_id": {"name": "...", "type": "...", "price": 0.0}}`
 - Rebuild after changes: `python build_v5_complete.py`
 

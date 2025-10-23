@@ -14,8 +14,8 @@ if not os.path.exists("furtorch_v5.py"):
     print("❌ furtorch_v5.py not found!")
     sys.exit(1)
 
-if not os.path.exists("full_table.json"):
-    print("❌ full_table.json not found!")
+if not os.path.exists("full_table_en.json"):
+    print("❌ full_table_en.json not found!")
     sys.exit(1)
 
 print("✓ Files found")
@@ -36,7 +36,7 @@ build_cmd = [
     "--onefile",
     "--windowed",
     "--name=FurTorch_v5",
-    "--add-data=full_table.json;.",
+    "--add-data=full_table_en.json;.",
     "--hidden-import=win32gui",
     "--hidden-import=win32process",
     "--hidden-import=win32api",
