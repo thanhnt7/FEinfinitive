@@ -174,6 +174,7 @@ class FurTorchV5:
 
         # Map cost tracking
         self.current_map_cost = 0.0  # Auto-calculated from consumed items
+        self.total_map_cost = 0.0  # Cumulative map cost across all maps
         self.consumed_items_current = {}  # Track consumed items per map
 
         # Track previous bag counts to calculate deltas
@@ -488,6 +489,9 @@ class FurTorchV5:
             # Subtract map cost from total income (so total profit is net)
             self.total_income -= self.current_map_cost
 
+            # Accumulate total map cost across all maps
+            self.total_map_cost += self.current_map_cost
+
             # Calculate net profit for this map
             net_profit = self.current_income - self.current_map_cost
 
@@ -556,11 +560,11 @@ class FurTorchV5:
             total_speed = (total_net_profit / total_time_calc) * 60
             self.lbl_total_speed.config(text=f"{total_speed:.2f}/min")
 
-        # Display map cost (current map only)
+        # Display map cost
         if self.view_mode == "current":
             self.lbl_map_cost.config(text=f"💰 Cost: {self.current_map_cost:.2f}")
         else:
-            self.lbl_map_cost.config(text=f"💰 Cost: (per map)")
+            self.lbl_map_cost.config(text=f"💰 Total Cost: {self.total_map_cost:.2f}")
 
         # Display net profit
         profit = current_net_profit if self.view_mode == "current" else total_net_profit
@@ -643,6 +647,7 @@ class FurTorchV5:
         data = {
             "total_time": self.total_time,
             "total_income": self.total_income,
+            "total_map_cost": self.total_map_cost,
             "map_count": self.map_count,
             "drops": {self.item_db[k]['name']: v for k, v in self.drops_total.items()}
         }
@@ -654,8 +659,10 @@ class FurTorchV5:
         if messagebox.askyesno("Reset", "Reset all statistics?"):
             self.current_time = self.total_time = 0
             self.current_income = self.total_income = 0
+            self.current_map_cost = self.total_map_cost = 0.0
             self.map_count = 0
             self.drops_current = self.drops_total = {}
+            self.consumed_items_current = {}
             self.is_tracking = self.is_in_map = False
             self.btn_start.config(state=tk.NORMAL)
             self.btn_end.config(state=tk.DISABLED)
