@@ -172,6 +172,10 @@ class FurTorchV5:
         self.view_mode = "current"
         self.start_time = time.time()
 
+        # Map cost tracking
+        self.current_map_cost = 0.0  # Auto-calculated from consumed items
+        self.consumed_items_current = {}  # Track consumed items per map
+
         # Track previous bag counts to calculate deltas
         self.previous_bag_counts = {}
         
@@ -250,13 +254,19 @@ class FurTorchV5:
         
         income_frame = ttk.Frame(main)
         income_frame.grid(row=2, column=0, columnspan=3, pady=10)
-        
-        self.lbl_income = ttk.Label(income_frame, text="🔥 0.00", 
+
+        # Map cost display (above profit)
+        self.lbl_map_cost = ttk.Label(income_frame, text="💰 Cost: 0.00",
+                                      font=('Arial', 10), foreground='#ef4444')
+        self.lbl_map_cost.grid(row=0, column=0, columnspan=2, pady=(0, 5))
+
+        # Profit display
+        self.lbl_income = ttk.Label(income_frame, text="🔥 Profit: 0.00",
                                     font=('Arial', 20, 'bold'), foreground='#10b981')
-        self.lbl_income.grid(row=0, column=0, padx=15)
-        
+        self.lbl_income.grid(row=1, column=0, padx=15)
+
         self.lbl_maps = ttk.Label(income_frame, text="🎫 0", font=('Arial', 12))
-        self.lbl_maps.grid(row=0, column=1, padx=15)
+        self.lbl_maps.grid(row=1, column=1, padx=15)
         
         btn = ttk.Frame(main)
         btn.grid(row=3, column=0, columnspan=3, pady=5)
@@ -416,21 +426,52 @@ class FurTorchV5:
                         delta = new_count - old_count
 
                         if delta > 0:
+                            # Items picked up
                             print(f"[DROP] ID:{item_id} x{delta} (bag: {old_count} -> {new_count})")
                             self.window.after(0, lambda id=item_id, c=delta: self.add_drop(id, c))
+                        elif delta < 0:
+                            # Items consumed (negative delta)
+                            consumed = abs(delta)
+                            print(f"[CONSUMED] ID:{item_id} x{consumed} (bag: {old_count} -> {new_count})")
+                            self.window.after(0, lambda id=item_id, c=consumed: self.add_consumed(id, c))
 
                         # Update tracking
                         self.previous_bag_counts[item_id] = new_count
                 except Exception as e:
                     print(f"[ERROR] Failed to parse BagMgr line: {e}")
                 
+    def add_consumed(self, item_id, count):
+        """Track consumed items and calculate map cost"""
+        if item_id not in self.item_db:
+            print(f"⚠ Unknown consumed item: {item_id}")
+            return
+
+        item = self.item_db[item_id]
+        price = item['price']
+
+        if self.settings['apply_tax'] and item_id != "100300":
+            price = price * 0.875
+
+        value = price * count
+
+        # Track consumed items for current map
+        self.consumed_items_current[item_id] = self.consumed_items_current.get(item_id, 0) + count
+
+        # Add to map cost
+        self.current_map_cost += value
+
+        print(f"✓ Consumed: {item['name']} x{count} = {value:.2f} (total map cost: {self.current_map_cost:.2f})")
+        self.update_display()
+
     def auto_start_map(self):
         if not self.is_in_map:
             self.is_in_map = True
             self.is_tracking = True
             self.current_time = 0
-            self.current_income = -self.settings['map_cost']
+            self.current_income = 0  # Don't subtract manual map_cost anymore
             self.drops_current = {}
+            self.consumed_items_current = {}
+            self.current_map_cost = 0.0  # Reset auto-calculated map cost
             self.map_count += 1
             self.start_time = time.time()
             self.btn_start.config(state=tk.DISABLED)
@@ -443,9 +484,16 @@ class FurTorchV5:
             self.is_tracking = False
             elapsed = int(time.time() - self.start_time)
             self.total_time += elapsed
+
+            # Subtract map cost from total income (so total profit is net)
+            self.total_income -= self.current_map_cost
+
+            # Calculate net profit for this map
+            net_profit = self.current_income - self.current_map_cost
+
             self.btn_start.config(state=tk.NORMAL)
             self.btn_end.config(state=tk.DISABLED)
-            self.status.config(text=f"✓ Map done! Profit: {self.current_income:.2f}", 
+            self.status.config(text=f"✓ Map done! Profit: {net_profit:.2f} (cost: {self.current_map_cost:.2f})",
                               foreground='#8b5cf6')
             
     def manual_start(self):
@@ -488,25 +536,36 @@ class FurTorchV5:
     def update_display(self):
         if self.is_tracking:
             self.current_time = int(time.time() - self.start_time)
-        
+
         m, s = divmod(self.current_time, 60)
         self.lbl_time.config(text=f"{m}m{s:02d}s")
-        
+
         tm, ts = divmod(self.total_time + (self.current_time if self.is_tracking else 0), 60)
         self.lbl_total_time.config(text=f"{tm}m{ts:02d}s")
-        
+
+        # Calculate net profit (income - map cost)
+        current_net_profit = self.current_income - self.current_map_cost
+        total_net_profit = self.total_income  # Total already accounts for all maps
+
         if self.current_time > 0:
-            speed = (self.current_income / self.current_time) * 60
+            speed = (current_net_profit / self.current_time) * 60
             self.lbl_speed.config(text=f"{speed:.2f}/min")
-        
+
         total_time_calc = self.total_time + (self.current_time if self.is_tracking else 0)
         if total_time_calc > 0:
-            total_speed = (self.total_income / total_time_calc) * 60
+            total_speed = (total_net_profit / total_time_calc) * 60
             self.lbl_total_speed.config(text=f"{total_speed:.2f}/min")
-        
-        income = self.current_income if self.view_mode == "current" else self.total_income
-        color = '#10b981' if income >= 0 else '#ef4444'
-        self.lbl_income.config(text=f"🔥 {income:.2f}", foreground=color)
+
+        # Display map cost (current map only)
+        if self.view_mode == "current":
+            self.lbl_map_cost.config(text=f"💰 Cost: {self.current_map_cost:.2f}")
+        else:
+            self.lbl_map_cost.config(text=f"💰 Cost: (per map)")
+
+        # Display net profit
+        profit = current_net_profit if self.view_mode == "current" else total_net_profit
+        color = '#10b981' if profit >= 0 else '#ef4444'
+        self.lbl_income.config(text=f"🔥 Profit: {profit:.2f}", foreground=color)
         self.lbl_maps.config(text=f"🎫 {self.map_count}")
         
     def toggle_view(self):
