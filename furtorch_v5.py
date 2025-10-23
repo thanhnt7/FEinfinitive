@@ -211,7 +211,7 @@ class FurTorchV5:
     def load_item_database(self):
         self.item_db = {}
         try:
-            with open("full_table.json", "r", encoding="utf-8") as f:
+            with open("full_table_en.json", "r", encoding="utf-8") as f:
                 full_table = json.load(f)
             for item_id, data in full_table.items():
                 self.item_db[item_id] = {
