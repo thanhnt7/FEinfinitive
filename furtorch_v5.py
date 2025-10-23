@@ -1,5 +1,5 @@
 # furtorch_v5.py
-# FIXED: Uses correct log format "+changedItems+" instead of "+DropItems+"
+# FIXED: Updated to parse new text-based log format (ItemChange/BagMgr)
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -95,67 +95,70 @@ def convert_from_log_structure(log_text):
     return root
 
 
-def scanned_log_for_changed_items(changed_text):
-    # FIXED: Look for +changedItems+ instead of +DropItems+
-    lines = changed_text.split('\n')
-    drop_blocks = []
-    i = 0
-    line_count = len(lines)
+def scan_log_for_pickups(log_text):
+    """
+    NEW: Scan for ItemChange and BagMgr events in the new log format.
 
-    while i < line_count:
-        line = lines[i]
-        # CHANGED: Now looking for "+changedItems+1+Index"
-        if re.search(r'\+changedItems\+1\+Index', line):
-            current_block = [line]
-            j = i + 1
-
-            while j < line_count:
-                current_line = lines[j]
-                if 'Display:' in current_line or '+changedItems+1+Index' in current_line:
-                    if '+changedItems+1+Index' not in current_line:
-                        current_block.append(current_line)
-                    j += 1
-                    break
-                current_block.append(current_line)
-                j += 1
-
-            drop_blocks.append('\n'.join(current_block))
-            i = j
-        else:
-            i += 1
-
-    return drop_blocks
-
-
-def parse_changed_items(drop_data):
-    # Extract BaseId and Num from changedItems structure
+    Example format:
+    ItemChange@ ProtoName=PickItems start
+    ItemChange@ Update Id=100200_... BagNum=464 in PageId=102 SlotId=22
+    BagMgr@:Modfy BagItem PageId = 102 SlotId = 22 ConfigBaseId = 100200 Num = 464
+    ItemChange@ ProtoName=PickItems end
+    """
     drops_found = []
-    
-    def recursive_search(data, path=""):
-        if isinstance(data, dict):
-            # Look for BaseId and Num at any level
-            if 'BaseId' in data and 'Num' in data:
-                base_id = data['BaseId']
-                num = data['Num']
-                if base_id and num:
-                    drops_found.append((str(base_id), int(num)))
-            
-            # Continue searching deeper
-            for key, value in data.items():
-                if isinstance(value, dict):
-                    recursive_search(value, f"{path}.{key}")
-    
-    recursive_search(drop_data)
+    lines = log_text.split('\n')
+
+    for line in lines:
+        # Look for BagMgr modify events with ConfigBaseId and Num
+        if 'BagMgr@' in line and 'ConfigBaseId' in line and 'Num = ' in line:
+            try:
+                # Extract ConfigBaseId (item ID)
+                base_id_match = re.search(r'ConfigBaseId\s*=\s*(\d+)', line)
+                # Extract Num (count) - need to be careful to get the right Num
+                num_match = re.search(r'Num\s*=\s*(\d+)', line)
+
+                if base_id_match and num_match:
+                    item_id = base_id_match.group(1)
+                    # For Num, we want the DIFFERENCE from previous count
+                    # But since we don't track previous, we'll just use increment of 1
+                    # This might need adjustment based on actual behavior
+                    drops_found.append((item_id, 1))
+            except Exception as e:
+                print(f"[ERROR] Failed to parse BagMgr line: {e}")
+
+        # Alternative: Look for ItemChange Update events
+        elif 'ItemChange@' in line and 'Update' in line and 'BagNum=' in line:
+            try:
+                # Extract the item ID from the UUID-like string
+                # Format: Id=100200_c26bfde9-af0d-11f0-b8b8-00000000002a
+                id_match = re.search(r'Id=(\d+)_', line)
+                if id_match:
+                    item_id = id_match.group(1)
+                    # Count as 1 pickup (we don't have delta info)
+                    # Note: This will be deduplicated with BagMgr events
+                    # So we'll prefer BagMgr events and skip ItemChange
+                    pass
+            except Exception as e:
+                print(f"[ERROR] Failed to parse ItemChange line: {e}")
+
     return drops_found
+
+
+def parse_pickup_events(log_text):
+    """
+    Parse pickup events from new log format.
+    Returns list of (item_id, count) tuples.
+    """
+    return scan_log_for_pickups(log_text)
 
 
 class FurTorchV5:
     def __init__(self):
         self.window = tk.Tk()
-        self.window.title("FurTorch v5.0 - FIXED Log Format")
+        self.window.title("FurTorch v5.0 - New Log Format")
         self.window.geometry("600x450")
         self.window.resizable(False, False)
-        
+
         # State
         self.is_tracking = False
         self.is_in_map = False
@@ -168,6 +171,9 @@ class FurTorchV5:
         self.drops_total = {}
         self.view_mode = "current"
         self.start_time = time.time()
+
+        # Track previous bag counts to calculate deltas
+        self.previous_bag_counts = {}
         
         # Settings
         self.settings = {
@@ -224,7 +230,7 @@ class FurTorchV5:
         main = ttk.Frame(self.window, padding="10")
         main.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        ttk.Label(main, text="🔥 FurTorch v5 (Fixed Format)", 
+        ttk.Label(main, text="🔥 FurTorch v5 (New Format)",
                  font=('Arial', 14, 'bold')).grid(row=0, column=0, columnspan=3, pady=5)
         
         stats = ttk.LabelFrame(main, text="Statistics", padding="10")
@@ -314,14 +320,32 @@ class FurTorchV5:
             
             self.settings['log_path'] = log_path
             
+            # Initialize bag state from existing log
+            print("Initializing bag state from log...")
             with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                existing_log = f.read()
+                # Parse existing BagMgr events to get current bag state
+                for line in existing_log.split('\n'):
+                    if 'BagMgr@' in line and 'ConfigBaseId' in line and 'Num = ' in line:
+                        try:
+                            base_id_match = re.search(r'ConfigBaseId\s*=\s*(\d+)', line)
+                            num_match = re.search(r'Num\s*=\s*(\d+)', line)
+                            if base_id_match and num_match:
+                                item_id = base_id_match.group(1)
+                                count = int(num_match.group(1))
+                                self.previous_bag_counts[item_id] = count
+                        except:
+                            pass
+
+                # Move to end of file for monitoring new events
                 f.seek(0, 2)
                 self.log_position = f.tell()
-            
-            self.status.config(text="✓ Game detected! Monitoring changedItems events!", 
+
+            print(f"Initialized {len(self.previous_bag_counts)} item counts from log")
+            self.status.config(text="✓ Game detected! Monitoring pickup events!",
                               foreground='#10b981')
             print(f"✓ Monitoring: {log_path}")
-            print("✓ Looking for: +changedItems+ events")
+            print("✓ Looking for: ItemChange and BagMgr pickup events")
             
         except Exception as e:
             print(f"❌ Error: {e}")
@@ -373,22 +397,32 @@ class FurTorchV5:
                     print("[MAP] Exiting map")
                     self.window.after(0, self.auto_end_map)
         
-        # FIXED: Look for changedItems instead of DropItems
-        drop_blocks = scanned_log_for_changed_items(text)
-        if drop_blocks:
-            print(f"[PARSE] Found {len(drop_blocks)} changedItems blocks")
-        
-        for block in drop_blocks:
-            try:
-                parsed = convert_from_log_structure(block)
-                drops = parse_changed_items(parsed)
-                if drops:
-                    print(f"[PARSE] Extracted {len(drops)} items")
-                for item_id, count in drops:
-                    print(f"[DROP] ID:{item_id} x{count}")
-                    self.window.after(0, lambda id=item_id, c=count: self.add_drop(id, c))
-            except Exception as e:
-                print(f"[ERROR] Parse error: {e}")
+        # NEW: Look for ItemChange/BagMgr pickup events and calculate deltas
+        lines = text.split('\n')
+        for line in lines:
+            if 'BagMgr@' in line and 'ConfigBaseId' in line and 'Num = ' in line:
+                try:
+                    # Extract ConfigBaseId (item ID)
+                    base_id_match = re.search(r'ConfigBaseId\s*=\s*(\d+)', line)
+                    # Extract Num (total count in bag)
+                    num_match = re.search(r'Num\s*=\s*(\d+)', line)
+
+                    if base_id_match and num_match:
+                        item_id = base_id_match.group(1)
+                        new_count = int(num_match.group(1))
+
+                        # Calculate delta from previous count
+                        old_count = self.previous_bag_counts.get(item_id, 0)
+                        delta = new_count - old_count
+
+                        if delta > 0:
+                            print(f"[DROP] ID:{item_id} x{delta} (bag: {old_count} -> {new_count})")
+                            self.window.after(0, lambda id=item_id, c=delta: self.add_drop(id, c))
+
+                        # Update tracking
+                        self.previous_bag_counts[item_id] = new_count
+                except Exception as e:
+                    print(f"[ERROR] Failed to parse BagMgr line: {e}")
                 
     def auto_start_map(self):
         if not self.is_in_map:
@@ -595,9 +629,10 @@ class FurTorchV5:
 
 if __name__ == "__main__":
     print("="*60)
-    print("FurTorch v5.0 - With Correct Log Format")
+    print("FurTorch v5.0 - New Log Format Parser")
     print("="*60)
-    print("Fixed: Now detects +changedItems+ events")
+    print("Updated: Now parses ItemChange/BagMgr pickup events")
+    print("Compatible with: 2025.10.23+ game log format")
     print()
     
     try:
