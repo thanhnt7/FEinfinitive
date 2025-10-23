@@ -466,6 +466,7 @@ class FurTorchV5:
             self.current_income = 0  # Don't subtract manual map_cost anymore
             self.drops_current = {}
             self.consumed_items_current = {}
+            self.previous_bag_counts = {}  # Reset inventory tracking for new map
             self.current_map_cost = 0.0  # Reset auto-calculated map cost
             self.map_count += 1
             self.start_time = time.time()
