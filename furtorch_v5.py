@@ -330,29 +330,15 @@ class FurTorchV5:
                 return
             
             self.settings['log_path'] = log_path
-            
-            # Initialize bag state from existing log
-            print("Initializing bag state from log...")
-            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                existing_log = f.read()
-                # Parse existing BagMgr events to get current bag state
-                for line in existing_log.split('\n'):
-                    if 'BagMgr@' in line and 'ConfigBaseId' in line and 'Num = ' in line:
-                        try:
-                            base_id_match = re.search(r'ConfigBaseId\s*=\s*(\d+)', line)
-                            num_match = re.search(r'Num\s*=\s*(\d+)', line)
-                            if base_id_match and num_match:
-                                item_id = base_id_match.group(1)
-                                count = int(num_match.group(1))
-                                self.previous_bag_counts[item_id] = count
-                        except:
-                            pass
 
-                # Move to end of file for monitoring new events
+            # Move to end of file to skip historical data - only track current session
+            print("Moving to end of log file (skipping historical data)...")
+            with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # Seek to end of file immediately - don't read historical data
                 f.seek(0, 2)
                 self.log_position = f.tell()
 
-            print(f"Initialized {len(self.previous_bag_counts)} item counts from log")
+            print(f"✓ Ready to track current session only (historical data ignored)")
             self.status.config(text="✓ Game detected! Monitoring pickup events!",
                               foreground='#10b981')
             print(f"✓ Monitoring: {log_path}")
